@@ -161,6 +161,13 @@ export default function DashboardPage() {
       href: "/analisis",
       color: "bg-cyan-700",
     },
+    {
+      title: "Laporan Keseluruhan",
+      description: "Laporan semua murid mengikut tahun",
+      icon: "📋",
+      href: "/laporan-keseluruhan",
+      color: "bg-teal-700",
+    },
   ];
 
   return (
