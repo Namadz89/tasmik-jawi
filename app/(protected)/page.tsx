@@ -154,6 +154,13 @@ export default function DashboardPage() {
       href: "/laporan",
       color: "bg-amber-700",
     },
+    {
+      title: "Analisis Kemajuan",
+      description: "Statistik dan perkembangan bacaan murid",
+      icon: "📈",
+      href: "/analisis",
+      color: "bg-cyan-700",
+    },
   ];
 
   return (
