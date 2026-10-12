@@ -28,6 +28,8 @@ export default function LaporanKeseluruhanPage() {
   const [tahun, setTahun] = useState<number>(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -77,13 +79,80 @@ export default function LaporanKeseluruhanPage() {
   const adaTasmik = rows.filter((r) => r.tasmik).length;
   const adaJawi = rows.filter((r) => r.jawi).length;
 
+  async function eksportExcel() {
+    if (loading || error || exporting) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      // Import hanya apabila butang diklik supaya halaman lebih ringan.
+      const ExcelJS = (await import("exceljs")).default;
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet(`Tahun ${tahun}`);
+      sheet.columns = [
+        { header: "Bil.", key: "bil", width: 9 },
+        { header: "Nama Murid", key: "nama", width: 28 },
+        { header: "Tahun", key: "tahun", width: 12 },
+        { header: "Tasmik Terkini", key: "tasmik", width: 42 },
+        { header: "Tarikh Tasmik", key: "tarikhTasmik", width: 18 },
+        { header: "Jawi Terkini", key: "jawi", width: 32 },
+        { header: "Tarikh Jawi", key: "tarikhJawi", width: 18 },
+      ];
+      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1D4ED8" } };
+      sheet.getRow(1).alignment = { vertical: "middle" };
+      sheet.getRow(1).height = 25;
+      sheet.views = [{ state: "frozen", ySplit: 1 }];
+      sheet.autoFilter = "A1:G1";
+
+      rows.forEach(({ murid: m, tasmik: t, jawi: j }, index) => {
+        const row = sheet.addRow({
+          bil: index + 1,
+          nama: m.name,
+          tahun: m.year,
+          tasmik: t ? formatTasmik(t) : "Belum ada rekod",
+          tarikhTasmik: formatTarikh(t?.date),
+          jawi: j ? `Cilik Celik Jawi — MS ${j.page}` : "Belum ada rekod",
+          tarikhJawi: formatTarikh(j?.date),
+        });
+        row.alignment = { vertical: "middle", wrapText: true };
+        if (index % 2 === 1) {
+          row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer as BlobPart], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Laporan_Tasmik_Jawi_Tahun_${tahun}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      console.error(err);
+      setExportError("Gagal mengeksport Excel. Sila cuba lagi.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-900 sm:px-6 print:bg-white print:p-0">
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 print:hidden">
           <Link href="/" className="rounded-lg bg-white px-4 py-2 font-semibold text-blue-700 shadow-sm hover:bg-blue-50">← Kembali ke Dashboard</Link>
-          <button type="button" onClick={() => window.print()} disabled={loading || !!error} className="rounded-lg bg-blue-700 px-5 py-2 font-semibold text-white hover:bg-blue-800 disabled:opacity-50">🖨️ Cetak / Simpan PDF</button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={eksportExcel} disabled={loading || !!error || exporting} className="rounded-lg bg-green-700 px-5 py-2 font-semibold text-white hover:bg-green-800 disabled:opacity-50">
+              {exporting ? "Menyediakan Excel..." : "📊 Eksport Excel (.xlsx)"}
+            </button>
+            <button type="button" onClick={() => window.print()} disabled={loading || !!error} className="rounded-lg bg-blue-700 px-5 py-2 font-semibold text-white hover:bg-blue-800 disabled:opacity-50">🖨️ Cetak / Simpan PDF</button>
+          </div>
         </div>
+        {exportError && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-red-700 print:hidden">{exportError}</p>}
 
         <header className="mb-6 rounded-2xl bg-white p-6 shadow-sm print:rounded-none print:p-0 print:shadow-none">
           <h1 className="text-2xl font-bold">LAPORAN KESELURUHAN MENGIKUT TAHUN</h1>
