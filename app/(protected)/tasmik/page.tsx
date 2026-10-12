@@ -27,6 +27,7 @@ export default function TasmikPage() {
 
   const [tahun, setTahun] = useState("1");
   const [muridId, setMuridId] = useState("");
+  const [carianMurid, setCarianMurid] = useState("");
 
   // Tarikh dikosongkan dahulu supaya Next.js tidak menggunakan
   // new Date() semasa prerender.
@@ -105,6 +106,7 @@ export default function TasmikPage() {
 
   useEffect(() => {
     setMuridId("");
+    setCarianMurid("");
     setRekod([]);
   }, [tahun]);
 
@@ -114,6 +116,10 @@ export default function TasmikPage() {
 
   const muridTahun = murid.filter(
     (item) => item.year.toString() === tahun
+  );
+
+  const muridDitapis = muridTahun.filter((item) =>
+    item.name.toLocaleLowerCase().includes(carianMurid.trim().toLocaleLowerCase())
   );
 
   const muridDipilih = murid.find(
@@ -295,6 +301,18 @@ export default function TasmikPage() {
                 Murid
               </label>
 
+              <input
+                type="search"
+                value={carianMurid}
+                onChange={(e) => {
+                  setCarianMurid(e.target.value);
+                  setMuridId("");
+                }}
+                placeholder="Cari nama murid..."
+                aria-label="Cari nama murid"
+                className="mb-3 w-full rounded-lg border border-gray-300 px-4 py-3 text-black"
+              />
+
               {loadingMurid ? (
                 <div className="rounded-lg bg-gray-50 p-3">
                   Sedang mengambil data murid...
@@ -309,12 +327,20 @@ export default function TasmikPage() {
                     -- Pilih Murid --
                   </option>
 
-                  {muridTahun.map((item) => (
+                  {muridDitapis.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name}
                     </option>
                   ))}
                 </select>
+              )}
+
+              {!loadingMurid && muridDitapis.length === 0 && (
+                <p className="mt-2 text-sm text-gray-600">
+                  {carianMurid.trim()
+                    ? "Tiada murid ditemui untuk carian ini."
+                    : "Tiada murid aktif untuk tahun ini."}
+                </p>
               )}
             </div>
 
