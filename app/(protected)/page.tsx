@@ -47,6 +47,8 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let active = true;
+
     async function loadData() {
       setLoading(true);
       setError("");
@@ -57,6 +59,8 @@ export default function DashboardPage() {
           supabase.from("tasmik_records").select("*"),
           supabase.from("jawi_records").select("*"),
         ]);
+
+      if (!active) return;
 
       if (
         muridResult.error ||
@@ -75,6 +79,10 @@ export default function DashboardPage() {
     }
 
     void loadData();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const namaMurid = (id: number | string) => {
@@ -118,6 +126,7 @@ export default function DashboardPage() {
   const jumlahJawi = jawi.length;
   const jumlahRekod = jumlahTasmik + jumlahJawi;
 
+  // MENU UTAMA DASHBOARD
   const menu = [
     {
       title: "Dashboard",
@@ -167,6 +176,15 @@ export default function DashboardPage() {
       icon: "📋",
       href: "/laporan-keseluruhan",
       color: "bg-teal-700",
+    },
+
+    // MENU BAHARU FASA 4
+    {
+      title: "Backup Data",
+      description: "Muat turun sandaran rekod murid",
+      icon: "💾",
+      href: "/backup",
+      color: "bg-indigo-700",
     },
   ];
 
@@ -323,7 +341,9 @@ export default function DashboardPage() {
                 Sedang memuatkan rekod...
               </p>
             ) : error ? (
-              <p className="p-6 text-red-600">{error}</p>
+              <p className="p-6 text-red-600">
+                {error}
+              </p>
             ) : rekodTerkini.length === 0 ? (
               <p className="p-6 text-slate-500">
                 Belum ada rekod Tasmik atau Jawi.
@@ -376,6 +396,7 @@ export default function DashboardPage() {
           <br />
           Guru Pendidikan Islam: RAZEEN BIN RAHMAN
         </footer>
+
       </div>
     </main>
   );
