@@ -82,7 +82,7 @@ export default function LoginPage() {
               </span>
             </h1>
 
-            {/* KOD SEKOLAH - TANPA LABEL */}
+            {/* KOD SEKOLAH */}
             <p className="mt-2 text-sm font-semibold text-slate-600">
               XBA1229
             </p>
@@ -117,7 +117,7 @@ export default function LoginPage() {
                   htmlFor="email"
                   className="mb-2 block text-sm font-semibold text-slate-700"
                 >
-                  Email MOE
+                  Email
                 </label>
 
                 <input
@@ -128,7 +128,7 @@ export default function LoginPage() {
                   onChange={(event) =>
                     setEmail(event.target.value)
                   }
-                  placeholder="Masukkan email MOE anda"
+                  placeholder="Masukkan email anda"
                   required
                   disabled={loading}
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-black placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
