@@ -1,13 +1,15 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 type Murid = {
-  id: string;
+  id: number | string;
   name: string;
   year: number;
-  status: string;
+  status: string | null;
 };
 
 export default function MuridPage() {
@@ -15,65 +17,65 @@ export default function MuridPage() {
   const [nama, setNama] = useState("");
   const [tahun, setTahun] = useState("1");
   const [status, setStatus] = useState("Aktif");
+
   const [carian, setCarian] = useState("");
   const [filterTahun, setFilterTahun] = useState("Semua");
+  const [filterStatus, setFilterStatus] = useState("Semua");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
 
-  // ================================
-  // AMBIL DATA MURID DARI SUPABASE
-  // ================================
+  // Ambil data murid
   async function ambilMurid() {
     setLoading(true);
-    setMessage("");
 
     const { data, error } = await supabase
       .from("students")
-      .select("*")
+      .select("id, name, year, status")
       .order("year", { ascending: true })
       .order("name", { ascending: true });
 
     if (error) {
-      console.error(error);
+      console.error("Gagal mengambil murid:", error);
       setMessage("Gagal mengambil data murid.");
-      setLoading(false);
-      return;
+      setIsError(true);
+    } else {
+      setMurid((data ?? []) as Murid[]);
     }
 
-    setMurid(data || []);
     setLoading(false);
   }
 
   useEffect(() => {
-    ambilMurid();
+    void ambilMurid();
   }, []);
 
-  // ================================
-  // TAMBAH MURID
-  // ================================
-  async function tambahMurid(e: React.FormEvent) {
+  // Tambah murid
+  async function tambahMurid(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     if (!nama.trim()) {
       setMessage("Sila masukkan nama murid.");
+      setIsError(true);
       return;
     }
 
     setSaving(true);
     setMessage("");
 
-    const { error } = await supabase.from("students").insert([
-      {
-        name: nama.trim(),
-        year: Number(tahun),
-        status: status,
-      },
-    ]);
+    const { error } = await supabase.from("students").insert({
+      name: nama.trim(),
+      year: Number(tahun),
+      status,
+    });
 
     if (error) {
-      console.error(error);
+      console.error("Gagal menambah murid:", error);
       setMessage("Gagal menyimpan murid.");
+      setIsError(true);
       setSaving(false);
       return;
     }
@@ -81,71 +83,96 @@ export default function MuridPage() {
     setNama("");
     setTahun("1");
     setStatus("Aktif");
-    setMessage("Murid berjaya ditambah.");
     setSaving(false);
 
     await ambilMurid();
+    setMessage("Murid berjaya ditambah.");
+    setIsError(false);
   }
 
-  // ================================
-  // PADAM MURID
-  // ================================
-  async function padamMurid(id: string, namaMurid: string) {
-    const sahkan = window.confirm(
-      `Adakah anda pasti mahu padam murid "${namaMurid}"?`
-    );
+  // Nyahaktif atau aktifkan semula murid
+  async function tukarStatusMurid(item: Murid) {
+    const sedangAktif = item.status === "Aktif";
+    const statusBaharu = sedangAktif ? "Tidak Aktif" : "Aktif";
 
-    if (!sahkan) {
+    const mesejPengesahan = sedangAktif
+      ? `Nyahaktifkan murid "${item.name}"?\n\nSemua rekod Tasmik dan Jawi murid ini akan dikekalkan.`
+      : `Aktifkan semula murid "${item.name}"?`;
+
+    if (!window.confirm(mesejPengesahan)) {
       return;
     }
 
-    const { error } = await supabase
+    const id = String(item.id);
+    setUpdatingId(id);
+    setMessage("");
+
+    const { data, error } = await supabase
       .from("students")
-      .delete()
-      .eq("id", id);
+      .update({ status: statusBaharu })
+      .eq("id", item.id)
+      .select("id, status")
+      .single();
 
-    if (error) {
-      console.error(error);
+    if (error || !data || data.status !== statusBaharu) {
+      console.error("Gagal mengubah status:", error);
       setMessage(
-        "Gagal padam murid. Pastikan murid ini tiada rekod Tasmik atau Jawi."
+        `Gagal mengubah status murid "${item.name}". Sila cuba lagi.`
       );
+      setIsError(true);
+      setUpdatingId(null);
       return;
     }
 
-    setMessage("Murid berjaya dipadam.");
     await ambilMurid();
+
+    setMessage(
+      sedangAktif
+        ? `"${item.name}" berjaya dinyahaktifkan. Semua rekod Tasmik dan Jawi dikekalkan.`
+        : `"${item.name}" berjaya diaktifkan semula.`
+    );
+    setIsError(false);
+    setUpdatingId(null);
   }
 
-  // ================================
-  // CARI & FILTER
-  // ================================
+  // Carian dan penapisan
   const muridDitapis = murid.filter((item) => {
     const padanNama = item.name
       .toLowerCase()
-      .includes(carian.toLowerCase());
+      .includes(carian.trim().toLowerCase());
 
     const padanTahun =
       filterTahun === "Semua" ||
-      item.year.toString() === filterTahun;
+      Number(item.year) === Number(filterTahun);
 
-    return padanNama && padanTahun;
+    const padanStatus =
+      filterStatus === "Semua" ||
+      item.status === filterStatus;
+
+    return padanNama && padanTahun && padanStatus;
   });
+
+  const jumlahAktif = murid.filter(
+    (item) => item.status === "Aktif"
+  ).length;
+
+  const jumlahTidakAktif = murid.filter(
+    (item) => item.status !== "Aktif"
+  ).length;
 
   return (
     <main className="min-h-screen bg-gray-100 px-4 py-6 text-black">
       <div className="mx-auto max-w-5xl">
         {/* HEADER */}
         <div className="mb-6 rounded-2xl bg-white p-6 shadow">
-          <div className="mb-2">
-            <a
-              href="/"
-              className="text-sm font-semibold text-blue-600 hover:underline"
-            >
-              ← Kembali ke Dashboard
-            </a>
-          </div>
+          <Link
+            href="/"
+            className="text-sm font-semibold text-blue-600 hover:underline"
+          >
+            ← Kembali ke Dashboard
+          </Link>
 
-          <h1 className="text-3xl font-bold">
+          <h1 className="mt-4 text-3xl font-bold">
             👨‍🎓 Senarai Murid
           </h1>
 
@@ -155,7 +182,7 @@ export default function MuridPage() {
         </div>
 
         {/* BORANG TAMBAH MURID */}
-        <div className="mb-6 rounded-2xl bg-white p-6 shadow">
+        <section className="mb-6 rounded-2xl bg-white p-6 shadow">
           <h2 className="mb-4 text-xl font-bold">
             ➕ Tambah Murid
           </h2>
@@ -165,47 +192,59 @@ export default function MuridPage() {
             className="grid gap-4 md:grid-cols-4"
           >
             <div className="md:col-span-2">
-              <label className="mb-1 block font-semibold">
+              <label
+                htmlFor="nama"
+                className="mb-1 block font-semibold"
+              >
                 Nama Murid
               </label>
 
               <input
+                id="nama"
                 type="text"
                 value={nama}
                 onChange={(e) => setNama(e.target.value)}
                 placeholder="Contoh: Ahmad bin Ali"
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-blue-500"
+                required
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-black outline-none focus:border-blue-500"
               />
             </div>
 
             <div>
-              <label className="mb-1 block font-semibold">
+              <label
+                htmlFor="tahun"
+                className="mb-1 block font-semibold"
+              >
                 Tahun
               </label>
 
               <select
+                id="tahun"
                 value={tahun}
                 onChange={(e) => setTahun(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-black"
               >
-                <option value="1">Tahun 1</option>
-                <option value="2">Tahun 2</option>
-                <option value="3">Tahun 3</option>
-                <option value="4">Tahun 4</option>
-                <option value="5">Tahun 5</option>
-                <option value="6">Tahun 6</option>
+                {[1, 2, 3, 4, 5, 6].map((n) => (
+                  <option key={n} value={n}>
+                    Tahun {n}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div>
-              <label className="mb-1 block font-semibold">
+              <label
+                htmlFor="status"
+                className="mb-1 block font-semibold"
+              >
                 Status
               </label>
 
               <select
+                id="status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-4 py-3"
+                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-black"
               >
                 <option value="Aktif">Aktif</option>
                 <option value="Tidak Aktif">Tidak Aktif</option>
@@ -215,7 +254,7 @@ export default function MuridPage() {
             <div className="md:col-span-4">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || loading}
                 className="rounded-lg bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? "Menyimpan..." : "Simpan Murid"}
@@ -224,124 +263,186 @@ export default function MuridPage() {
           </form>
 
           {message && (
-            <div className="mt-4 rounded-lg bg-blue-50 p-3 font-semibold text-blue-800">
+            <div
+              role="status"
+              className={`mt-4 rounded-lg p-4 font-semibold ${
+                isError
+                  ? "bg-red-50 text-red-800"
+                  : "bg-green-50 text-green-800"
+              }`}
+            >
               {message}
             </div>
           )}
-        </div>
+        </section>
 
         {/* SENARAI MURID */}
-        <div className="rounded-2xl bg-white p-6 shadow">
-          <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-xl font-bold">
-                📋 Senarai Murid
-              </h2>
+        <section className="rounded-2xl bg-white p-6 shadow">
+          <div className="mb-5">
+            <h2 className="text-xl font-bold">
+              📋 Senarai Murid
+            </h2>
 
-              <p className="mt-1 text-gray-600">
-                Jumlah murid: {muridDitapis.length}
-              </p>
-            </div>
+            <p className="mt-2 text-gray-600">
+              Jumlah murid: {murid.length}
+            </p>
 
-            <div className="flex flex-col gap-3 md:flex-row">
-              <div>
-                <label className="mb-1 block text-sm font-semibold">
-                  Cari Nama
-                </label>
-
-                <input
-                  type="text"
-                  value={carian}
-                  onChange={(e) => setCarian(e.target.value)}
-                  placeholder="Cari murid..."
-                  className="rounded-lg border border-gray-300 px-4 py-2"
-                />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl bg-green-50 p-4">
+                <p className="font-semibold text-green-800">
+                  Murid Aktif
+                </p>
+                <p className="mt-1 text-2xl font-bold text-green-900">
+                  {jumlahAktif}
+                </p>
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-semibold">
-                  Tahun
-                </label>
-
-                <select
-                  value={filterTahun}
-                  onChange={(e) => setFilterTahun(e.target.value)}
-                  className="rounded-lg border border-gray-300 px-4 py-2"
-                >
-                  <option value="Semua">Semua</option>
-                  <option value="1">Tahun 1</option>
-                  <option value="2">Tahun 2</option>
-                  <option value="3">Tahun 3</option>
-                  <option value="4">Tahun 4</option>
-                  <option value="5">Tahun 5</option>
-                  <option value="6">Tahun 6</option>
-                </select>
+              <div className="rounded-xl bg-gray-100 p-4">
+                <p className="font-semibold text-gray-700">
+                  Murid Tidak Aktif
+                </p>
+                <p className="mt-1 text-2xl font-bold text-gray-900">
+                  {jumlahTidakAktif}
+                </p>
               </div>
             </div>
           </div>
 
-          {/* LOADING */}
-          {loading && (
+          {/* CARI DAN TAPIS */}
+          <div className="mb-5 grid gap-3 sm:grid-cols-3">
+            <div>
+              <label
+                htmlFor="carian"
+                className="mb-1 block text-sm font-semibold"
+              >
+                Cari Nama
+              </label>
+
+              <input
+                id="carian"
+                type="text"
+                value={carian}
+                onChange={(e) => setCarian(e.target.value)}
+                placeholder="Cari murid..."
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-black"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="filterTahun"
+                className="mb-1 block text-sm font-semibold"
+              >
+                Tahun
+              </label>
+
+              <select
+                id="filterTahun"
+                value={filterTahun}
+                onChange={(e) => setFilterTahun(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-black"
+              >
+                <option value="Semua">Semua Tahun</option>
+                {[1, 2, 3, 4, 5, 6].map((n) => (
+                  <option key={n} value={n}>
+                    Tahun {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="filterStatus"
+                className="mb-1 block text-sm font-semibold"
+              >
+                Status
+              </label>
+
+              <select
+                id="filterStatus"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-black"
+              >
+                <option value="Semua">Semua Status</option>
+                <option value="Aktif">Aktif</option>
+                <option value="Tidak Aktif">Tidak Aktif</option>
+              </select>
+            </div>
+          </div>
+
+          <p className="mb-4 text-sm text-gray-600">
+            Memaparkan {muridDitapis.length} murid
+          </p>
+
+          {loading ? (
             <div className="rounded-lg bg-gray-50 p-6 text-center">
               Sedang mengambil data murid...
             </div>
-          )}
-
-          {/* TIADA MURID */}
-          {!loading && muridDitapis.length === 0 && (
+          ) : muridDitapis.length === 0 ? (
             <div className="rounded-lg bg-gray-50 p-8 text-center">
               <p className="text-lg font-semibold">
                 Tiada murid dijumpai.
               </p>
-
               <p className="mt-2 text-gray-600">
-                Tambahkan murid menggunakan borang di atas.
+                Semak carian atau pilihan penapis.
               </p>
             </div>
-          )}
-
-          {/* SENARAI */}
-          {!loading && muridDitapis.length > 0 && (
+          ) : (
             <div className="space-y-3">
-              {muridDitapis.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 md:flex-row md:items-center md:justify-between"
-                >
-                  <div>
-                    <h3 className="text-lg font-bold">
-                      {item.name}
-                    </h3>
+              {muridDitapis.map((item) => {
+                const aktif = item.status === "Aktif";
+                const sedangDikemasKini =
+                  updatingId === String(item.id);
 
-                    <p className="text-gray-600">
-                      Tahun {item.year}
-                    </p>
+                return (
+                  <div
+                    key={String(item.id)}
+                    className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div>
+                      <h3 className="text-lg font-bold text-black">
+                        {item.name}
+                      </h3>
 
-                    <span
-                      className={`mt-2 inline-block rounded-full px-3 py-1 text-sm font-semibold ${
-                        item.status === "Aktif"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-200 text-gray-700"
+                      <p className="text-gray-600">
+                        Tahun {item.year}
+                      </p>
+
+                      <span
+                        className={`mt-2 inline-block rounded-full px-3 py-1 text-sm font-semibold ${
+                          aktif
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-200 text-gray-700"
+                        }`}
+                      >
+                        {aktif ? "Aktif" : "Tidak Aktif"}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={updatingId !== null || saving}
+                      onClick={() => void tukarStatusMurid(item)}
+                      className={`rounded-lg px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+                        aktif
+                          ? "bg-amber-600 hover:bg-amber-700"
+                          : "bg-green-700 hover:bg-green-800"
                       }`}
                     >
-                      {item.status}
-                    </span>
+                      {sedangDikemasKini
+                        ? "Mengemas kini..."
+                        : aktif
+                        ? "⏸️ Nyahaktif"
+                        : "✅ Aktifkan Semula"}
+                    </button>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      padamMurid(item.id, item.name)
-                    }
-                    className="rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
-                  >
-                    🗑️ Padam
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
-        </div>
+        </section>
       </div>
     </main>
   );
